@@ -5,16 +5,41 @@
   "main": "src/main.cjs",
   "author": "Spirekeeper",
   "license": "MIT",
-  "scripts": { "start": "electron .", "test": "node --test test/*.test.cjs", "test:ui": "node test/ui-smoke.cjs", "build": "electron-builder --win portable --x64" },
-  "devDependencies": { "electron": "^41.0.0", "electron-builder": "^26.0.12", "playwright": "^1.56.0" },
+  "scripts": {
+    "start": "electron .",
+    "test": "node --test test/*.test.cjs",
+    "test:ui": "node test/ui-smoke.cjs",
+    "build": "electron-builder --win portable --x64",
+    "format": "prettier --write src test scripts package.json .prettierrc.json",
+    "format:check": "prettier --check src test scripts package.json .prettierrc.json"
+  },
+  "devDependencies": {
+    "electron": "^41.0.0",
+    "electron-builder": "^26.0.12",
+    "playwright": "^1.56.0",
+    "prettier": "^3.9.10"
+  },
   "build": {
     "appId": "local.spirekeeper.desktop",
     "productName": "Spirekeeper",
     "compression": "store",
-    "directories": { "output": "dist" },
-    "files": ["src/**/*", "package.json"],
-    "asarUnpack": ["src/steam-helper.ps1"],
-    "win": { "target": "portable", "signAndEditExecutable": false },
-    "portable": { "artifactName": "Spirekeeper-${version}.exe", "useZip": true }
+    "directories": {
+      "output": "dist"
+    },
+    "files": [
+      "src/**/*",
+      "package.json"
+    ],
+    "asarUnpack": [
+      "src/steam-helper.ps1"
+    ],
+    "win": {
+      "target": "portable",
+      "signAndEditExecutable": false
+    },
+    "portable": {
+      "artifactName": "Spirekeeper-${version}.exe",
+      "useZip": true
+    }
   }
 }
