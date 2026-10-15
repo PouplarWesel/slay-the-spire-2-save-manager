@@ -1,23 +1,40 @@
-const $ = (id) => document.getElementById(id);
+import type { Action, AppState, CurrentRun, DesktopApi, RunMetadata } from './types.js';
+
+declare global {
+  interface Window {
+    spire: DesktopApi;
+  }
+}
+
+type Control = HTMLInputElement & HTMLButtonElement & HTMLDialogElement & HTMLFormElement;
+const $ = (id: string): Control => document.getElementById(id) as Control;
 const esc = (v) =>
   String(v ?? '').replace(
     /[&<>"']/g,
     (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' })[c],
   );
 const date = (v) => new Date(v).toLocaleString();
-let state,
+let state: AppState,
   busy = false,
   selected = null,
   selectedBackup = null,
   modalAction,
   search = '';
-function status(text, error = false) {
+
+function status(text: string, error = false) {
   $('status').textContent = text;
   $('status').classList.toggle('error', error);
 }
-async function call(action, payload, message, quiet = false) {
+
+async function call(
+  action: Action,
+  payload?: any,
+  message?: string | ((state: AppState) => string),
+  quiet = false,
+) {
   if (busy) return false;
   busy = true;
+
   try {
     if (['load', 'unload', 'restore'].includes(action) || (action === 'capture' && payload?.unload))
       status('Updating saves…');
@@ -34,7 +51,8 @@ async function call(action, payload, message, quiet = false) {
     busy = false;
   }
 }
-const characters = (m) =>
+
+const characters = (m: RunMetadata | CurrentRun) =>
   (m?.players || [])
     .map((p) => {
       const character = p.character
@@ -44,6 +62,7 @@ const characters = (m) =>
       return p.steamName ? p.steamName + ' (' + character + ')' : character;
     })
     .join(', ');
+
 function render() {
   if (!state) return;
   const c = state.current,
@@ -91,14 +110,16 @@ function render() {
       : '');
   $('profiles').value = state.profile;
   $('libraryPath').value = state.libraryPath;
-  $('slotCount').textContent = state.slots.length;
-  $('backupCount').textContent = state.backups.length;
+  $('slotCount').textContent = String(state.slots.length);
+  $('backupCount').textContent = String(state.backups.length);
   const filtered = state.slots.filter((s) =>
     (s.name + ' ' + s.notes + ' ' + characters(s.metadata))
       .toLowerCase()
       .includes(search.toLowerCase()),
   );
+
   if (!filtered.some((s) => s.id === selected)) selected = filtered[0]?.id || null;
+
   if (!state.backups.some((b) => b.id === selectedBackup))
     selectedBackup = state.backups[0]?.id || null;
   $('saveList').innerHTML = filtered.length
@@ -152,6 +173,7 @@ function render() {
     b = state.backups.find((b) => b.id === selectedBackup);
   $('load').disabled = locked || !s || !state.profile;
   $('update').disabled = locked || !s || !c || c.invalid;
+
   for (const id of ['export', 'edit', 'remove']) $(id).disabled = !s;
   $('restore').disabled = locked || !b || b.profile !== state.profile;
   $('selectionDetails').textContent = s
@@ -165,6 +187,7 @@ function render() {
       (s.notes ? '\n' + s.notes : '')
     : 'Select a saved run to see its details.';
 }
+
 function openModal({
   title,
   description,
@@ -174,6 +197,15 @@ function openModal({
   submit = 'Continue',
   alternate = false,
   action,
+}: {
+  title: string;
+  description: string;
+  fields?: boolean;
+  name?: string;
+  notes?: string;
+  submit?: string;
+  alternate?: boolean;
+  action: (alternate?: boolean) => Promise<boolean>;
 }) {
   modalAction = action;
   $('modalTitle').textContent = title;
@@ -187,7 +219,8 @@ function openModal({
   $('modal').showModal();
   (fields ? $('name') : $('modalSubmit')).focus();
 }
-function confirmAction(action, id) {
+
+function confirmAction(action: Action, id?: string) {
   const s = state.slots.find((s) => s.id === id);
   const titles = {
     load: 'Load saved run',
@@ -227,9 +260,11 @@ function confirmAction(action, id) {
       ),
   });
 }
+
 async function submitModal(alternate = false) {
   if (busy || !modalAction || !$('modalForm').reportValidity()) return;
   const ok = await modalAction(alternate);
+
   if (ok) $('modal').close();
 }
 $('modalForm').addEventListener('submit', (e) => {
@@ -263,6 +298,7 @@ $('remove').addEventListener('click', () => confirmAction('remove', selected));
 $('restore').addEventListener('click', () => confirmAction('restore', selectedBackup));
 $('edit').addEventListener('click', () => {
   const s = state.slots.find((s) => s.id === selected);
+
   if (!s) return;
   openModal({
     title: 'Rename / notes',
@@ -287,7 +323,7 @@ for (const [id, action] of [
   ['launch', 'launch'],
   ['recover', 'recover'],
 ])
-  $(id).addEventListener('click', () => call(action));
+  $(id).addEventListener('click', () => call(action as Action));
 $('refresh').addEventListener('click', async () => {
   if (await call('state')) await call('resolveNames', null, null, true);
 });
@@ -300,12 +336,14 @@ $('search').addEventListener('input', () => {
   render();
 });
 document.addEventListener('click', (e) => {
-  const s = e.target.closest('[data-slot]'),
-    b = e.target.closest('[data-backup]');
+  const s = (e.target as HTMLElement).closest<HTMLElement>('[data-slot]'),
+    b = (e.target as HTMLElement).closest<HTMLElement>('[data-backup]');
+
   if (s) {
     selected = s.dataset.slot;
     render();
   }
+
   if (b) {
     selectedBackup = b.dataset.backup;
     render();
@@ -318,7 +356,7 @@ for (const [list, key] of [
   $(list).addEventListener('keydown', (e) => {
     if (!['ArrowDown', 'ArrowUp'].includes(e.key) || !state) return;
     e.preventDefault();
-    const rows = Array.from($(list).querySelectorAll('[data-' + key + ']'));
+    const rows = Array.from($(list).querySelectorAll<HTMLElement>('[data-' + key + ']'));
     const id = list === 'saveList' ? selected : selectedBackup;
     const index = rows.findIndex((r) => r.dataset[key] === id);
     const next =
@@ -327,7 +365,7 @@ for (const [list, key] of [
       if (list === 'saveList') selected = next.dataset[key];
       else selectedBackup = next.dataset[key];
       render();
-      $(list).querySelector('[aria-selected="true"]')?.focus();
+      $(list).querySelector<HTMLElement>('[aria-selected="true"]')?.focus();
     }
   });
 window.addEventListener('focus', () => {

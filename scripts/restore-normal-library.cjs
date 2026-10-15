@@ -3,7 +3,7 @@
 const fs = require('node:fs');
 const path = require('node:path');
 const os = require('node:os');
-const { Store, hash } = require('../src/store.cjs');
+const { Store, hash } = require('../build/store.cjs');
 (async () => {
   const appData = process.env.APPDATA || path.join(os.homedir(), 'AppData', 'Roaming');
   const source = new Store({

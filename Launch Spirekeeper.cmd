@@ -1,15 +1,20 @@
 @echo off
 cd /d "%~dp0"
-if exist "Spirekeeper-1.0.0.exe" (
-  start "" "Spirekeeper-1.0.0.exe"
+if exist "Spirekeeper-1.1.0.exe" (
+  start "" "Spirekeeper-1.1.0.exe"
   exit /b
 )
-if exist "dist\Spirekeeper-1.0.0.exe" (
-  start "" "dist\Spirekeeper-1.0.0.exe"
+if exist "dist\Spirekeeper-1.1.0.exe" (
+  start "" "dist\Spirekeeper-1.1.0.exe"
   exit /b
 )
 if not exist "node_modules\electron\dist\electron.exe" (
   echo Run npm install in this folder first.
+  pause
+  exit /b 1
+)
+call npm run compile
+if errorlevel 1 (
   pause
   exit /b 1
 )

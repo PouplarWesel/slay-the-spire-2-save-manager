@@ -1,17 +1,21 @@
-const fs = require('node:fs');
-const path = require('node:path');
-const { execFileSync } = require('node:child_process');
-const { NAMES, hash } = require('./store.cjs');
-const encode = (files) =>
+import fs from 'node:fs';
+import { CloudError } from './types.js';
+import type { CloudSnapshot, SaveFiles } from './types.js';
+import path from 'node:path';
+import { execFileSync } from 'node:child_process';
+import { NAMES, hash } from './store.cjs';
+export const encode = (files: SaveFiles) =>
   Object.fromEntries(Object.entries(files).map(([n, b]) => [n, b.toString('base64')]));
-function validate(snapshot) {
+
+export function validate(snapshot: CloudSnapshot) {
   if (
     !snapshot ||
     typeof snapshot.enabled !== 'boolean' ||
     !snapshot.files ||
     typeof snapshot.files !== 'object'
   )
-    throw new Error('Invalid Steam Cloud response.');
+    throw new CloudError('Invalid Steam Cloud response.');
+
   for (const [n, b] of Object.entries(snapshot.files)) {
     if (
       !NAMES.includes(n) ||
@@ -20,28 +24,37 @@ function validate(snapshot) {
     )
       throw new Error('Invalid Steam multiplayer file.');
   }
+
   return snapshot;
 }
-function hashes(snapshot) {
+
+export function hashes(snapshot: CloudSnapshot) {
   return Object.fromEntries(
     Object.entries(snapshot.files).map(([n, b]) => [n, hash(Buffer.from(b, 'base64'))]),
   );
 }
-function same(a, b) {
+
+export function same(a: { files: Record<string, string> }, b: { files: Record<string, string> }) {
   return NAMES.every((n) => (a.files[n] ?? null) === (b.files[n] ?? null));
 }
-class SteamCloud {
+
+export class SteamCloud {
+  helperPath: string;
+  invoke: typeof execFileSync;
+  dllPath?: string;
+
   constructor({
     helperPath = path
       .join(__dirname, 'steam-helper.ps1')
       .replace(/app\.asar([\\/])/, 'app.asar.unpacked$1'),
     invoke = execFileSync,
     dllPath,
-  } = {}) {
+  }: { helperPath?: string; invoke?: typeof execFileSync; dllPath?: string } = {}) {
     this.helperPath = helperPath;
     this.invoke = invoke;
     this.dllPath = dllPath;
   }
+
   context(profile) {
     const normalized = path.resolve(profile).replace(/\\/g, '/');
     const match = normalized.match(
@@ -50,6 +63,7 @@ class SteamCloud {
     if (!match) return null;
     return { steamId: match[1], profileKey: match[2] };
   }
+
   findDll() {
     if (this.dllPath && fs.existsSync(this.dllPath)) return this.dllPath;
     const candidates = [];
@@ -91,7 +105,8 @@ class SteamCloud {
       'Cannot find the game’s Steam library. Install Slay the Spire 2 in a Steam library before swapping saves.',
     );
   }
-  request(profile, action, more = {}) {
+
+  request(profile: string, action: string, more = {}): CloudSnapshot {
     const context = this.context(profile);
     if (!context) return { enabled: false, files: {}, customProfile: true };
     let output;
@@ -108,7 +123,7 @@ class SteamCloud {
         },
       );
     } catch (e) {
-      const error = new Error(
+      const error = new CloudError(
         'Steam Cloud could not be verified. Keep Steam open and the game closed, then try again.',
       );
       error.cloudUncertain = action === 'apply';
@@ -119,7 +134,7 @@ class SteamCloud {
       .filter((l) => l.startsWith('SPIREKEEPER_RESULT='))
       .pop();
     if (!line) {
-      const e = new Error('Steam did not return a verified save result.');
+      const e = new CloudError('Steam did not return a verified save result.');
       e.cloudUncertain = action === 'apply';
       throw e;
     }
@@ -127,26 +142,29 @@ class SteamCloud {
     try {
       result = JSON.parse(line.slice(19));
     } catch {
-      const e = new Error('Steam returned an unreadable save result.');
+      const e = new CloudError('Steam returned an unreadable save result.');
       e.cloudUncertain = action === 'apply';
       throw e;
     }
     if (!result.ok) {
-      const e = new Error(result.error || 'Steam rejected the save operation.');
+      const e = new CloudError(result.error || 'Steam rejected the save operation.');
       e.cloudUncertain = Boolean(result.needsRecovery);
       throw e;
     }
     if (result.steamId !== context.steamId)
       throw new Error('Steam account does not match the selected game profile.');
-    if (action === 'names') return { names: result.names || {} };
+    if (action === 'names') return { enabled: false, files: {}, names: result.names || {} };
     return validate({ ...result, profileKey: context.profileKey });
   }
+
   read(profile) {
     return this.request(profile, 'read');
   }
+
   names(profile, ids) {
     return this.request(profile, 'names', { ids }).names || {};
   }
+
   apply(profile, files, expected) {
     const context = this.context(profile);
     if (
@@ -160,11 +178,10 @@ class SteamCloud {
       expected: expected.files,
     });
     if (!same(result, { files: encode(files) })) {
-      const e = new Error('Steam save did not match the requested swap.');
+      const e = new CloudError('Steam save did not match the requested swap.');
       e.cloudUncertain = true;
       throw e;
     }
     return result;
   }
 }
-module.exports = { SteamCloud, encode, validate, hashes, same };

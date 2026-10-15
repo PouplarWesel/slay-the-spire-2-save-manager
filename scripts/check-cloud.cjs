@@ -2,8 +2,8 @@
 const path = require('node:path');
 const os = require('node:os');
 const { execFileSync } = require('node:child_process');
-const { Store } = require('../src/store.cjs');
-const { SteamCloud } = require('../src/steam-cloud.cjs');
+const { Store } = require('../build/store.cjs');
+const { SteamCloud } = require('../build/steam-cloud.cjs');
 const appData = process.env.APPDATA || path.join(os.homedir(), 'AppData', 'Roaming');
 const running = () =>
   Boolean(

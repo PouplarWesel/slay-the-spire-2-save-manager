@@ -1,15 +1,17 @@
-const { app, BrowserWindow, ipcMain, dialog, shell } = require('electron');
-const path = require('node:path');
-const { execFileSync } = require('node:child_process');
-const fs = require('node:fs');
-const { Store } = require('./store.cjs');
-const { SteamCloud } = require('./steam-cloud.cjs');
-let win, store;
+import { app, BrowserWindow, ipcMain, dialog, shell } from 'electron';
+import path from 'node:path';
+import { execFileSync } from 'node:child_process';
+import fs from 'node:fs';
+import { Store } from './store.cjs';
+import { SteamCloud } from './steam-cloud.cjs';
+let win: BrowserWindow;
+let store: Store;
 if (process.env.SPIREKEEPER_DATA_DIR) {
   const isolatedData = path.join(process.env.SPIREKEEPER_DATA_DIR, 'electron-data');
   fs.mkdirSync(isolatedData, { recursive: true });
   app.setPath('userData', isolatedData);
 }
+
 function running() {
   try {
     return Boolean(
@@ -28,6 +30,7 @@ function running() {
     throw new Error('Cannot check whether the game is running. Try refreshing.');
   }
 }
+
 if (!app.requestSingleInstanceLock()) app.quit();
 else {
   app.on('second-instance', () => {

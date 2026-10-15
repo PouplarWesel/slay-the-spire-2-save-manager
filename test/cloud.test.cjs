@@ -3,8 +3,8 @@ const assert = require('node:assert/strict');
 const fs = require('node:fs');
 const os = require('node:os');
 const path = require('node:path');
-const { Store, FILE, NAMES, hash } = require('../src/store.cjs');
-const { SteamCloud, encode, same } = require('../src/steam-cloud.cjs');
+const { Store, FILE, NAMES, hash } = require('../build/store.cjs');
+const { SteamCloud, encode, same } = require('../build/steam-cloud.cjs');
 const payload = (act) =>
   Buffer.from(
     JSON.stringify({

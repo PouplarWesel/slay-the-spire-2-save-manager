@@ -1,15 +1,27 @@
-const fs = require('node:fs');
-const path = require('node:path');
-const { randomUUID, createHash } = require('node:crypto');
-const FILE = 'current_run_mp.save';
-const NAMES = [FILE, FILE + '.backup'];
+import fs from 'node:fs';
+import type {
+  AppState,
+  CurrentRun,
+  LibraryIndex,
+  RunMetadata,
+  SaveFiles,
+  SaveRecord,
+  CloudSnapshot,
+} from './types.js';
+import type { SteamCloud } from './steam-cloud.cjs';
+import path from 'node:path';
+import { randomUUID, createHash } from 'node:crypto';
+export const FILE = 'current_run_mp.save';
+export const NAMES = [FILE, FILE + '.backup'];
 const MAX = 32 * 1024 * 1024;
-const hash = (b) => createHash('sha256').update(b).digest('hex');
-const cloudEncode = (files) =>
+export const hash = (b: Buffer | string) => createHash('sha256').update(b).digest('hex');
+const cloudEncode = (files: SaveFiles) =>
   Object.fromEntries(Object.entries(files).map(([n, b]) => [n, b.toString('base64')]));
 const cloudSame = (a, b) => NAMES.every((n) => (a.files[n] ?? null) === (b.files[n] ?? null));
+
 function safePath(p) {
   let cur = path.resolve(p);
+
   for (;;) {
     if (fs.existsSync(cur) && fs.lstatSync(cur).isSymbolicLink())
       throw new Error('Symbolic links and junctions are not supported: ' + cur);
@@ -17,11 +29,14 @@ function safePath(p) {
     if (parent === cur) break;
     cur = parent;
   }
+
   return path.resolve(p);
 }
+
 function atomic(p, bytes) {
   safePath(p);
   const temp = p + '.' + randomUUID() + '.tmp';
+
   try {
     const fd = fs.openSync(temp, 'wx');
     try {
@@ -35,14 +50,19 @@ function atomic(p, bytes) {
     if (fs.existsSync(temp)) fs.unlinkSync(temp);
   }
 }
+
 function readBytes(p, max = MAX) {
   safePath(p);
   const s = fs.statSync(p);
+
   if (!s.isFile() || s.size > max) throw new Error('Save file exceeds the supported size limit.');
+
   return fs.readFileSync(p);
 }
-function metadata(bytes) {
+
+export function metadata(bytes: Buffer): RunMetadata {
   let j;
+
   try {
     j = JSON.parse(
       bytes
@@ -53,6 +73,7 @@ function metadata(bytes) {
   } catch {
     throw new Error('This is not a readable JSON save file.');
   }
+
   if (
     !j ||
     !Array.isArray(j.players) ||
@@ -65,6 +86,7 @@ function metadata(bytes) {
     throw new Error(
       'This does not look like a multiplayer run save. Select current_run_mp.save from the host’s profile.',
     );
+
   return {
     act: j.current_act_index + 1,
     ascension: j.ascension ?? 0,
@@ -80,13 +102,37 @@ function metadata(bytes) {
     schema: j.schema_version ?? null,
   };
 }
+
 function text(v, max) {
   return String(v ?? '')
     .trim()
     .slice(0, max);
 }
-class Store {
-  constructor({ dataDir, saveRoot, isGameRunning = () => false, fault = () => {}, cloud = null }) {
+
+export class Store {
+  dataDir: string;
+  saveRoot: string;
+  indexPath: string;
+  isGameRunning: () => boolean;
+  fault: (filename: string) => void;
+  cloud: SteamCloud | null;
+  db: LibraryIndex;
+  libraryWarnings: string[];
+  recoveryRequired: boolean;
+
+  constructor({
+    dataDir,
+    saveRoot,
+    isGameRunning = () => false,
+    fault = () => {},
+    cloud = null,
+  }: {
+    dataDir: string;
+    saveRoot: string;
+    isGameRunning?: () => boolean;
+    fault?: (filename: string) => void;
+    cloud?: SteamCloud | null;
+  }) {
     this.dataDir = safePath(dataDir);
     this.saveRoot = saveRoot;
     this.isGameRunning = isGameRunning;
@@ -101,6 +147,7 @@ class Store {
     this.recoveryRequired = fs.existsSync(path.join(this.dataDir, 'pending.json'));
     this.refresh();
   }
+
   refresh() {
     const existed = fs.existsSync(this.indexPath);
     let damaged = false;
@@ -127,7 +174,7 @@ class Store {
           this.libraryWarnings.push('Could not read roster for ' + slot.name + ': ' + e.message);
         }
       }
-    for (const type of ['slots', 'backups']) {
+    for (const type of ['slots', 'backups'] as const) {
       const known = new Set(this.db[type].map((r) => r.id));
       for (const entry of fs.readdirSync(path.join(this.dataDir, type), { withFileTypes: true })) {
         if (
@@ -184,9 +231,11 @@ class Store {
     this.recoveryRequired = fs.existsSync(path.join(this.dataDir, 'pending.json'));
     return recovered;
   }
+
   persist() {
     atomic(this.indexPath, JSON.stringify(this.db, null, 2));
   }
+
   profiles() {
     const found = [];
     const walk = (dir, depth) => {
@@ -208,6 +257,7 @@ class Store {
     walk(this.saveRoot, 0);
     return found;
   }
+
   configure(dir) {
     if (this.recoveryRequired)
       throw new Error('Recover the interrupted swap before changing profiles.');
@@ -221,19 +271,22 @@ class Store {
     this.persist();
     return this.state();
   }
+
   profile() {
     if (!this.db.profile) throw new Error('Choose a game profile first.');
     return safePath(this.db.profile);
   }
-  pair(dir) {
-    const out = {};
+
+  pair(dir: string): SaveFiles {
+    const out: SaveFiles = {};
     for (const n of NAMES) {
       const p = path.join(dir, n);
       if (fs.existsSync(p)) out[n] = readBytes(p);
     }
     return out;
   }
-  current() {
+
+  current(): CurrentRun | null {
     if (!this.db.profile) return null;
     const p = path.join(this.profile(), FILE);
     if (!fs.existsSync(p)) return null;
@@ -249,7 +302,8 @@ class Store {
       return { invalid: true, error: e.message };
     }
   }
-  state() {
+
+  state(): AppState {
     this.refresh();
     const profiles = this.profiles();
     const activeProfiles = profiles.filter((p) => fs.existsSync(path.join(p.path, FILE)));
@@ -281,6 +335,7 @@ class Store {
       cloudSupported: Boolean(this.cloud?.context?.(this.db.profile || '')),
     };
   }
+
   resolveNames() {
     if (!this.cloud?.names) throw new Error('Steam name lookup is unavailable.');
     const ids = [
@@ -306,22 +361,30 @@ class Store {
     this.persist();
     return this.state();
   }
+
   guard() {
     this.profile();
     if (this.recoveryRequired)
       throw new Error('An interrupted swap needs recovery. Use Recover interrupted swap first.');
     if (this.isGameRunning()) throw new Error('Close Slay the Spire 2 before changing saves.');
   }
+
   slot(id) {
     const s = this.db.slots.find((s) => s.id === id);
     if (!s) throw new Error('Save slot not found.');
     return s;
   }
+
   folder(type, id) {
     if (!/^[a-f0-9-]{36}$/.test(id)) throw new Error('Invalid library ID.');
     return safePath(path.join(this.dataDir, type, id));
   }
-  writeBundle(type, files, info) {
+
+  writeBundle(
+    type: string,
+    files: SaveFiles,
+    info: Partial<SaveRecord> & { profile: string },
+  ): SaveRecord {
     const id = randomUUID(),
       dir = this.folder(type, id);
     fs.mkdirSync(dir);
@@ -338,14 +401,16 @@ class Store {
     atomic(path.join(dir, 'manifest.json'), JSON.stringify(result, null, 2));
     return result;
   }
-  verify(type, record) {
+
+  verify(type: string, record: SaveRecord): SaveFiles {
     const files = this.pair(this.folder(type, record.id));
     for (const n of NAMES)
       if ((record.hashes[n] || null) !== (files[n] ? hash(files[n]) : null))
         throw new Error('Save integrity check failed. Original files have not been replaced.');
     return files;
   }
-  backup(reason, cloudBefore = null) {
+
+  backup(reason: string, cloudBefore: CloudSnapshot | null = null) {
     const cloudInfo = cloudBefore?.enabled
       ? {
           steamId: cloudBefore.steamId,
@@ -369,8 +434,9 @@ class Store {
     this.persist();
     return b;
   }
-  cloudBackup(b) {
-    const snapshot = JSON.parse(
+
+  cloudBackup(b: SaveRecord): CloudSnapshot {
+    const snapshot: CloudSnapshot = JSON.parse(
       readBytes(path.join(this.folder('backups', b.id), 'steam-cloud.json'), MAX * 3).toString(
         'utf8',
       ),
@@ -393,6 +459,7 @@ class Store {
         throw new Error('Steam recovery backup checksum failed.');
     return snapshot;
   }
+
   capture({ name, notes = '', unload = false }) {
     this.guard();
     name = text(name, 100);
@@ -416,6 +483,7 @@ class Store {
     }
     return this.state();
   }
+
   updateSlot(id) {
     this.guard();
     const old = this.slot(id);
@@ -436,6 +504,7 @@ class Store {
     fs.renameSync(this.folder('slots', old.id), this.folder('trash', old.id));
     return this.state();
   }
+
   apply(files) {
     const dir = this.profile();
     for (const n of NAMES) {
@@ -445,6 +514,7 @@ class Store {
       this.fault(n);
     }
   }
+
   swap(files, reason, loaded) {
     this.guard();
     const cloudBefore = this.cloud ? this.cloud.read(this.db.profile) : null;
@@ -505,6 +575,7 @@ class Store {
       );
     }
   }
+
   load(id) {
     const s = this.slot(id);
     const files = this.verify('slots', s);
@@ -512,6 +583,7 @@ class Store {
     this.swap(files, 'Before loading: ' + s.name, { id, profile: this.db.profile });
     return this.state();
   }
+
   unload() {
     this.guard();
     if (!Object.keys(this.pair(this.profile())).length)
@@ -519,6 +591,7 @@ class Store {
     this.swap({}, 'Loaded out active run', null);
     return this.state();
   }
+
   restore(id) {
     const b = this.db.backups.find((b) => b.id === id);
     if (!b) throw new Error('Backup not found.');
@@ -527,6 +600,7 @@ class Store {
     this.swap(this.verify('backups', b), 'Before restoring backup', null);
     return this.state();
   }
+
   recover() {
     if (this.isGameRunning()) throw new Error('Close the game before recovering.');
     const p = path.join(this.dataDir, 'pending.json'),
@@ -560,6 +634,7 @@ class Store {
     this.recoveryRequired = false;
     return this.state();
   }
+
   edit({ id, name, notes }) {
     const s = this.slot(id);
     name = text(name, 100);
@@ -569,6 +644,7 @@ class Store {
     this.persist();
     return this.state();
   }
+
   remove(id) {
     const s = this.slot(id);
     fs.renameSync(this.folder('slots', s.id), this.folder('trash', s.id));
@@ -577,14 +653,15 @@ class Store {
     this.persist();
     return this.state();
   }
+
   importFile(p) {
     const bytes = readBytes(p, path.extname(p).toLowerCase() === '.spire' ? MAX * 3 : MAX);
-    let files = { [FILE]: bytes },
+    let files: SaveFiles = { [FILE]: bytes },
       name = path.basename(p).replace(/\.(save|spire)$/, '');
     if (path.extname(p).toLowerCase() === '.spire') {
       let j;
       try {
-        j = JSON.parse(bytes);
+        j = JSON.parse(bytes.toString('utf8'));
       } catch {
         throw new Error('Invalid Spirekeeper export.');
       }
@@ -613,6 +690,7 @@ class Store {
     this.persist();
     return this.state();
   }
+
   exportFile(id, dest) {
     const s = this.slot(id),
       files = this.verify('slots', s);
@@ -634,4 +712,3 @@ class Store {
     return this.state();
   }
 }
-module.exports = { Store, metadata, FILE, NAMES, hash };

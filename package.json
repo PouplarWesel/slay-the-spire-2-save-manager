@@ -1,23 +1,27 @@
 {
   "name": "spirekeeper",
-  "version": "1.0.0",
+  "version": "1.1.0",
   "description": "Local multiplayer save manager for Slay the Spire 2",
-  "main": "src/main.cjs",
+  "main": "build/main.cjs",
   "author": "Spirekeeper",
   "license": "MIT",
   "scripts": {
-    "start": "electron .",
-    "test": "node --test test/*.test.cjs",
-    "test:ui": "node test/ui-smoke.cjs",
-    "build": "electron-builder --win portable --x64",
-    "format": "prettier --write src test scripts package.json .prettierrc.json",
-    "format:check": "prettier --check src test scripts package.json .prettierrc.json"
+    "compile": "tsc && node scripts/prepare-build.cjs",
+    "typecheck": "tsc --noEmit",
+    "start": "npm run compile && electron .",
+    "test": "npm run compile && node --test test/*.test.cjs",
+    "test:ui": "npm run compile && node test/ui-smoke.cjs",
+    "build": "npm run compile && electron-builder --win portable --x64",
+    "format": "node scripts/space-source.cjs && prettier --write src test scripts package.json tsconfig.json .prettierrc.json",
+    "format:check": "prettier --check src test scripts package.json tsconfig.json .prettierrc.json"
   },
   "devDependencies": {
+    "@types/node": "^26.6.5",
     "electron": "^41.0.0",
     "electron-builder": "^26.0.12",
     "playwright": "^1.56.0",
-    "prettier": "^3.9.10"
+    "prettier": "^3.9.10",
+    "typescript": "^7.0.2"
   },
   "build": {
     "appId": "local.spirekeeper.desktop",
@@ -27,11 +31,11 @@
       "output": "dist"
     },
     "files": [
-      "src/**/*",
+      "build/**/*",
       "package.json"
     ],
     "asarUnpack": [
-      "src/steam-helper.ps1"
+      "build/steam-helper.ps1"
     ],
     "win": {
       "target": "portable",

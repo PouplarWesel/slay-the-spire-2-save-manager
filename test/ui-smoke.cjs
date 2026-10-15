@@ -47,7 +47,7 @@ const assert = require('node:assert/strict');
     assert.equal(fs.existsSync(active), false);
     await page.locator('#load').click();
     await page.locator('#modalSubmit').click();
-    await page.getByText('Current run — Friday night crew', { exact: true }).waitFor();
+    await page.getByText('Current run - Friday night crew', { exact: true }).waitFor();
     assert.equal(fs.readFileSync(active, 'utf8'), bytes);
     assert.equal(fs.readFileSync(active + '.backup', 'utf8'), bytes);
     await page.locator('#search').fill('missing');
@@ -56,7 +56,7 @@ const assert = require('node:assert/strict');
     await page.locator('#edit').click();
     await page.locator('#name').fill('The midnight party');
     await page.locator('#modalSubmit').click();
-    await page.getByText('Current run — The midnight party', { exact: true }).waitFor();
+    await page.getByText('Current run - The midnight party', { exact: true }).waitFor();
     assert.equal(await page.locator('[data-backup]').count(), 2);
     await page.locator('summary').click();
     await page
