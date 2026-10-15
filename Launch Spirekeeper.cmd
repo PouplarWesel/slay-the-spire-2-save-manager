@@ -1,5 +1,9 @@
 @echo off
 cd /d "%~dp0"
+if exist "Spirekeeper-1.0.0.exe" (
+  start "" "Spirekeeper-1.0.0.exe"
+  exit /b
+)
 if exist "dist\Spirekeeper-1.0.0.exe" (
   start "" "dist\Spirekeeper-1.0.0.exe"
   exit /b
