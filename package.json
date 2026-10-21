@@ -1,0 +1,44 @@
+{
+  "name": "spirekeeper",
+  "version": "1.1.0",
+  "description": "Local multiplayer save manager for Slay the Spire 2",
+  "main": "build/main.cjs",
+  "author": "Spirekeeper",
+  "license": "MIT",
+  "scripts": {
+    "compile:tools": "tsc --project tsconfig.tools.json",
+    "compile": "tsc && npm run compile:tools && node .tooling/scripts/prepare-build.cjs",
+    "typecheck": "tsc --noEmit && tsc --project tsconfig.tools.json --noEmit",
+    "start": "npm run compile && electron .",
+    "build": "npm run compile && electron-builder --win portable --x64"
+  },
+  "devDependencies": {
+    "@types/node": "^26.6.5",
+    "electron": "^41.0.0",
+    "electron-builder": "^26.0.12",
+    "typescript": "^7.0.2"
+  },
+  "build": {
+    "appId": "local.spirekeeper.desktop",
+    "productName": "Spirekeeper",
+    "compression": "store",
+    "directories": {
+      "output": "dist"
+    },
+    "files": [
+      "build/**/*",
+      "package.json"
+    ],
+    "asarUnpack": [
+      "build/steam-helper.ps1"
+    ],
+    "win": {
+      "target": "portable",
+      "signAndEditExecutable": false
+    },
+    "portable": {
+      "artifactName": "Spirekeeper-${version}.exe",
+      "useZip": true
+    }
+  }
+}

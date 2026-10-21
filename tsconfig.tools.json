@@ -1,0 +1,9 @@
+{
+  "extends": "./tsconfig.json",
+  "compilerOptions": {
+    "rootDir": ".",
+    "outDir": ".tooling",
+    "noEmit": false
+  },
+  "include": ["scripts/prepare-build.cts"]
+}

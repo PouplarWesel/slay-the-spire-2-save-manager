@@ -1,0 +1,12 @@
+node_modules/
+dist/
+build/
+.tooling/
+artifacts/
+*.log
+test/
+scripts/*
+!scripts/prepare-build.cts
+.prettierignore
+.prettierrc.json
+tsconfig.local.json
